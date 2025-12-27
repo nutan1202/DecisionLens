@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Run Detail - X-Ray Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .json-viewer {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .collapsible {
+            cursor: pointer;
+        }
+        .collapsible-content {
+            display: none;
+        }
+        .collapsible-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 py-8">
+        <div class="mb-6">
+            <a href="/" class="text-blue-600 hover:text-blue-800 mb-2 inline-block">← Back to runs</a>
+            <h1 class="text-3xl font-bold">{{ run.name }}</h1>
+            <div class="mt-2 flex gap-4 text-sm text-gray-600">
+                <span>ID: {{ run.id }}</span>
+                <span>Started: {{ run.started_at[:19] if run.started_at else "N/A" }}</span>
+                {% if run.ended_at %}
+                <span>Ended: {{ run.ended_at[:19] }}</span>
+                {% endif %}
+                {% if run.duration_ms %}
+                <span>Duration: {{ "%.2f"|format(run.duration_ms / 1000.0) }}s</span>
+                {% endif %}
+                <span>
+                    {% if run.status == "success" %}
+                    <span class="px-2 py-1 rounded-full bg-green-100 text-green-800 text-xs font-semibold">Success</span>
+                    {% elif run.status == "error" %}
+                    <span class="px-2 py-1 rounded-full bg-red-100 text-red-800 text-xs font-semibold">Error</span>
+                    {% else %}
+                    <span class="px-2 py-1 rounded-full bg-yellow-100 text-yellow-800 text-xs font-semibold">Running</span>
+                    {% endif %}
+                </span>
+            </div>
+            {% if run.error %}
+            <div class="mt-4 p-4 bg-red-50 border border-red-200 rounded">
+                <p class="text-red-800 font-semibold">Error:</p>
+                <p class="text-red-700 text-sm mt-1">{{ run.error }}</p>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if run.steps %}
+        <div class="space-y-4">
+            {% for step in run.steps %}
+            <div class="bg-white shadow rounded-lg overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h2 class="text-xl font-semibold">{{ step.name }}</h2>
+                            <div class="mt-1 text-sm text-gray-500">
+                                Step {{ step.index + 1 }} of {{ run.steps|length }}
+                                {% if step.duration_ms %}
+                                • {{ "%.2f"|format(step.duration_ms / 1000.0) }}s
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div>
+                            {% if step.status == "success" %}
+                            <span class="px-3 py-1 rounded-full bg-green-100 text-green-800 text-sm font-semibold">Success</span>
+                            {% elif step.status == "error" %}
+                            <span class="px-3 py-1 rounded-full bg-red-100 text-red-800 text-sm font-semibold">Error</span>
+                            {% else %}
+                            <span class="px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 text-sm font-semibold">Running</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-6 py-4 space-y-4">
+                    {% if step.reasoning %}
+                    <div>
+                        <h3 class="font-semibold text-gray-700 mb-2">Reasoning</h3>
+                        <p class="text-gray-600 text-sm">{{ step.reasoning }}</p>
+                    </div>
+                    {% endif %}
+
+                    {% if step.input %}
+                    <div>
+                        <button class="collapsible font-semibold text-gray-700 mb-2" onclick="toggleCollapse('input-{{ step.id }}')">
+                            Input ▼
+                        </button>
+                        <div id="input-{{ step.id }}" class="collapsible-content json-viewer">
+                            <pre>{{ step.input | tojson(indent=2) }}</pre>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if step.output %}
+                    <div>
+                        <button class="collapsible font-semibold text-gray-700 mb-2" onclick="toggleCollapse('output-{{ step.id }}')">
+                            Output ▼
+                        </button>
+                        <div id="output-{{ step.id }}" class="collapsible-content json-viewer">
+                            <pre>{{ step.output | tojson(indent=2) }}</pre>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if step.filters_applied %}
+                    <div>
+                        <h3 class="font-semibold text-gray-700 mb-2">Filters Applied</h3>
+                        <div class="json-viewer">
+                            <pre>{{ step.filters_applied | tojson(indent=2) }}</pre>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if step.evaluations %}
+                    <div>
+                        <h3 class="font-semibold text-gray-700 mb-3">Candidate Evaluations</h3>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Candidate</th>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Metrics</th>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Filter Results</th>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    {% for eval in step.evaluations %}
+                                    <tr class="{% if not eval.get('qualified', True) %}bg-red-50{% endif %}">
+                                        <td class="px-4 py-3 text-sm">
+                                            {% if eval.get('title') %}
+                                            <div class="font-medium">{{ eval.title }}</div>
+                                            {% endif %}
+                                            {% if eval.get('asin') %}
+                                            <div class="text-gray-500 text-xs">ASIN: {{ eval.asin }}</div>
+                                            {% endif %}
+                                        </td>
+                                        <td class="px-4 py-3 text-sm">
+                                            {% if eval.get('metrics') %}
+                                            <div class="space-y-1">
+                                                {% if eval.metrics.get('price') %}
+                                                <div>Price: ${{ "%.2f"|format(eval.metrics.price) }}</div>
+                                                {% endif %}
+                                                {% if eval.metrics.get('rating') %}
+                                                <div>Rating: {{ eval.metrics.rating }}★</div>
+                                                {% endif %}
+                                                {% if eval.metrics.get('reviews') %}
+                                                <div>Reviews: {{ eval.metrics.reviews }}</div>
+                                                {% endif %}
+                                            </div>
+                                            {% endif %}
+                                        </td>
+                                        <td class="px-4 py-3 text-sm">
+                                            {% if eval.get('filter_results') %}
+                                            <div class="space-y-1">
+                                                {% for filter_name, filter_result in eval.filter_results.items() %}
+                                                <div>
+                                                    {% if filter_result.get('passed') %}
+                                                    <span class="text-green-600">✓</span>
+                                                    {% else %}
+                                                    <span class="text-red-600">✗</span>
+                                                    {% endif %}
+                                                    <span class="text-xs">{{ filter_name }}: {{ filter_result.get('detail', '') }}</span>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                            {% endif %}
+                                        </td>
+                                        <td class="px-4 py-3 text-sm">
+                                            {% if eval.get('qualified') %}
+                                            <span class="px-2 py-1 rounded-full bg-green-100 text-green-800 text-xs font-semibold">Qualified</span>
+                                            {% else %}
+                                            <span class="px-2 py-1 rounded-full bg-red-100 text-red-800 text-xs font-semibold">Failed</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if step.error %}
+                    <div class="p-4 bg-red-50 border border-red-200 rounded">
+                        <p class="text-red-800 font-semibold">Error:</p>
+                        <p class="text-red-700 text-sm mt-1">{{ step.error }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="bg-white shadow rounded-lg p-8 text-center">
+            <p class="text-gray-600">No steps recorded for this run.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <script>
+        function toggleCollapse(id) {
+            const element = document.getElementById(id);
+            element.classList.toggle('active');
+            const button = element.previousElementSibling;
+            if (element.classList.contains('active')) {
+                button.textContent = button.textContent.replace('▼', '▲');
+            } else {
+                button.textContent = button.textContent.replace('▲', '▼');
+            }
+        }
+    </script>
+</body>
+</html>
